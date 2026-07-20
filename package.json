@@ -1,0 +1,38 @@
+{
+  "name": "ocean",
+  "version": "0.1.0",
+  "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build:client": "tsc -b && vite build",
+    "build:server": "tsc -p server/tsconfig.json",
+    "build": "npm run build:client && npm run build:server",
+    "build:ocean": "node scripts/build-ocean.mjs",
+    "server": "node dist-server/index.js",
+    "server:local": "node --env-file-if-exists=.env --env-file-if-exists=.env.memory.local --env-file-if-exists=.env.reading.local --env-file-if-exists=.env.game.local dist-server/index.js",
+    "server:smoke": "node dist-server/smoke.js",
+    "server:provider-smoke": "node dist-server/providers/openaiCompatible.smoke.js",
+    "server:notion-smoke": "node dist-server/notionSync.smoke.js",
+    "server:auth-smoke": "node dist-server/access.smoke.js",
+    "reading:local": "node --env-file-if-exists=.env.reading.local scripts/start-co-reading-local.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@fontsource/eb-garamond": "^5.2.7",
+    "NeteaseCloudMusicApi": "^4.32.0",
+    "react": "latest",
+    "react-dom": "latest",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@types/web-push": "^3.6.4",
+    "@vitejs/plugin-react": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  }
+}

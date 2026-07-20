@@ -1,0 +1,113 @@
+.ocean-access { padding: 24px; }
+.ocean-access-shell {
+  align-items: center;
+  background: var(--page);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  height: min(844px, calc(100dvh - 48px));
+  justify-content: flex-start;
+  min-height: 640px;
+  overflow: hidden;
+  padding: max(58px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
+  position: relative;
+  width: min(390px, 100%);
+}
+.ocean-access-wallpaper {
+  height: 100%;
+  inset: 0;
+  object-fit: cover;
+  opacity: .34;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+}
+.ocean-access-kicker {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: .35em;
+  margin: 0;
+  position: relative;
+  z-index: 1;
+}
+.ocean-access-wordmark {
+  height: auto;
+  margin-top: 38px;
+  position: relative;
+  width: 250px;
+  z-index: 1;
+}
+.ocean-access-card {
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border-radius: 24px;
+  box-shadow: 0 16px 40px rgb(75 87 122 / 16%);
+  margin-top: 58px;
+  padding: 24px 20px 16px;
+  position: relative;
+  width: 100%;
+  z-index: 1;
+}
+.ocean-access-copy h1 {
+  color: var(--ink);
+  font-family: var(--font-cjk);
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.ocean-access-copy p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0 0 18px;
+}
+.ocean-access-card input {
+  background: var(--surface-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 14px;
+  height: 44px;
+  outline: none;
+  padding: 0 16px;
+  width: 100%;
+}
+.ocean-access-card input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+.ocean-access-card input::placeholder { color: color-mix(in srgb, var(--muted) 72%, transparent); }
+.ocean-access-card button {
+  background: var(--accent);
+  border: 0;
+  border-radius: 999px;
+  color: var(--surface);
+  font-size: 14px;
+  height: 44px;
+  margin-top: 12px;
+  width: 100%;
+}
+.ocean-access-card button:disabled { opacity: .48; }
+.ocean-access-error { color: var(--warm-strong); font-size: 12px; line-height: 20px; margin: 8px 0 0; min-height: 20px; text-align: center; }
+.ocean-access-loading {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+  margin-top: 112px;
+  position: relative;
+  z-index: 1;
+}
+.ocean-access-dots { display: inline-flex; gap: 7px; }
+.ocean-access-dots i {
+  animation: ocean-access-pulse 1s infinite alternate;
+  background: var(--accent);
+  border-radius: 50%;
+  display: block;
+  height: 6px;
+  width: 6px;
+}
+.ocean-access-dots i:nth-child(2) { animation-delay: .18s; }
+.ocean-access-dots i:nth-child(3) { animation-delay: .36s; }
+.ocean-access-loading p { color: var(--muted); font-size: 12px; margin: 0 6px; }
+@keyframes ocean-access-pulse { to { opacity: .25; transform: translateY(-2px); } }
+@media (max-width: 430px) {
+  .ocean-access { padding: 0; }
+  .ocean-access-shell { height: 100dvh; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .ocean-access-dots i { animation: none; } }

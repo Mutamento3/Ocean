@@ -1,0 +1,36 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 68 48.1247" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Group 23" filter="url(#filter0_d_0_6)">
+<g id="Group 9">
+<path id="Vector 5" d="M56.7073 27.9927C60.3143 14.8034 57.73 4.34088 44.4808 3.50578" stroke="var(--stroke-0, #C8CCFF)" stroke-width="3" stroke-linecap="round"/>
+<path id="Vector 6" d="M62.585 23.9516C48.9786 22.5971 40.135 16.4381 44.0991 3.76823" stroke="var(--stroke-0, #C8CCFF)" stroke-width="3" stroke-linecap="round"/>
+<path id="Vector 7" d="M48.9188 9.11059L48.9187 9.11064" stroke="var(--stroke-0, #C8CCFF)" stroke-width="3" stroke-linecap="round"/>
+</g>
+<g id="Group 8">
+<g id="Group 5">
+<path id="Vector 1" d="M19.9999 6.00005C30.2319 6.00005 30.8714 17.1067 28.6865 22.66C26.6398 27.8619 34.442 30.2958 36.9999 22.66" stroke="var(--stroke-0, #E7AD98)" stroke-width="3" stroke-linecap="round"/>
+<path id="Vector 2" d="M19.9999 6.00005C9.76797 6.00005 9.12847 17.1067 11.3134 22.66C13.3601 27.8619 5.55794 30.2958 2.99995 22.66" stroke="var(--stroke-0, #E7AD98)" stroke-width="3" stroke-linecap="round"/>
+</g>
+<path id="Vector 3" d="M16.9091 15.2728V16.8182" stroke="var(--stroke-0, #E7AD98)" stroke-width="3" stroke-linecap="round"/>
+<path id="Vector 4" d="M23.0909 15.2728V16.8182" stroke="var(--stroke-0, #E7AD98)" stroke-width="3" stroke-linecap="round"/>
+</g>
+<rect id="Rectangle 52" x="54" y="32" width="4" height="16" rx="2" transform="rotate(-30 54 32)" fill="var(--fill-0, #C8CCFF)"/>
+<rect id="Rectangle 53" width="4" height="16" rx="2" transform="matrix(-0.866025 -0.5 -0.5 0.866025 12.4641 32)" fill="var(--fill-0, #C8CCFF)"/>
+<rect id="Rectangle 51" x="1" y="26" width="64" height="8" rx="4" fill="var(--fill-0, #8A92A8)"/>
+<rect id="Rectangle 54" x="7" y="10" width="10" height="16" rx="2" fill="var(--fill-0, #C8CCFF)"/>
+<rect id="Rectangle 55" x="24" y="6" width="24" height="16" rx="2" fill="var(--fill-0, #8396BE)"/>
+<rect id="Rectangle 56" x="35" y="17" width="2" height="8" fill="var(--fill-0, #5E6680)"/>
+<path id="Vector 17" d="M31 25L30 26H42L41 25H31Z" fill="var(--fill-0, #C8CCFF)"/>
+</g>
+<defs>
+<filter id="filter0_d_0_6" x="0" y="1.00573" width="68" height="47.119" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dx="1" dy="1"/>
+<feGaussianBlur stdDeviation="1"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.1 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_6"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_6" result="shape"/>
+</filter>
+</defs>
+</svg>

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Theme Skins"
+  short_description: "Build reusable, accessible color skins for any interface"
+  default_prompt: "Use $build-theme-skins to create a complete semantic theme and audit all color roles and states."

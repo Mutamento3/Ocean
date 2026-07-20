@@ -1,0 +1,37 @@
+node_modules/
+dist/
+dist-server/
+*.log
+*.tgz
+.vite-*.log
+.vite-*.err.log
+
+# Local credentials and provider configuration
+.env*
+!.env.example
+
+# Local connector sources, sessions and runtime data
+.local-connectors/
+server/data/
+tmp/
+.tmp/
+pet-runs/
+*.tsbuildinfo
+/vite.config.js
+/vite.config.d.ts
+
+# Personal planning and release-session notes are not part of the public kit
+docs/PRD.md
+docs/PORTFOLIO_HANDOFF_2026-07-20.md
+docs/RELEASE_ACCEPTANCE_2026-07-20.md
+docs/figma-library-state.json
+docs/skill-review-zh/
+
+# Private deployment keys, staging bundles and host-specific files
+.deploy/
+
+# Editor and operating-system metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

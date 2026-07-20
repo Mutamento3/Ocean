@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ocean UI"
+  short_description: "Restore high-fidelity Figma interfaces without visual drift"
+  default_prompt: "Use $ocean-ui to implement this interface from its exact Figma structure and verify every interaction state."
