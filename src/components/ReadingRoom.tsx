@@ -5,6 +5,7 @@ import {
   type CoReadingAdapter,
   type CoReadingAnnotation,
   type CoReadingBook,
+  type CoReadingChunkMeta,
   type CoReadingPage,
 } from "../adapters/coReading";
 import type { ContinuitySnapshot, MessageTurn } from "../domain/ocean";
@@ -69,13 +70,30 @@ function isSupportedReadingFile(file: File) {
 
 async function openReadablePage(adapter: CoReadingAdapter, bookId: string, signal: AbortSignal) {
   const selected = await adapter.continueBook(bookId, signal);
-  const title = selected.chunk.title.trim().toLocaleLowerCase();
-  const isStructural = structuralTitles.has(title) || title === selected.title.trim().toLocaleLowerCase();
-  if (!isStructural && selected.text.trim().length >= 80) return selected;
+  const selectedChunk = selected.chunk;
+  const selectedText = typeof selected.text === "string" ? selected.text : "";
+  const bookTitle = selected.title?.trim() ?? "";
+
+  if (selectedChunk?.title) {
+    const title = selectedChunk.title.trim().toLocaleLowerCase();
+    const isStructural = structuralTitles.has(title) || title === bookTitle.toLocaleLowerCase();
+    if (!isStructural && selectedText.trim().length >= 80) return selected;
+  }
 
   const chunks = await adapter.listChunks(bookId, signal);
-  const candidate = chunks.find((chunk) => !chunk.read && (chunk.charCount ?? 0) >= 100 && !structuralTitles.has(chunk.title.trim().toLocaleLowerCase()) && chunk.title.trim() !== selected.title.trim());
-  return candidate ? adapter.readChunk(bookId, candidate.id, signal) : selected;
+  const isReadableChunk = (chunk: CoReadingChunkMeta) => {
+    const title = chunk.title?.trim() ?? "";
+    return (chunk.charCount ?? 0) >= 100
+      && !structuralTitles.has(title.toLocaleLowerCase())
+      && title !== bookTitle;
+  };
+  const lastChunkId = selected.progress?.lastChunkId;
+  const candidate = chunks.find((chunk) => !chunk.read && isReadableChunk(chunk))
+    ?? (lastChunkId ? chunks.find((chunk) => chunk.id === lastChunkId && isReadableChunk(chunk)) : undefined)
+    ?? chunks.find(isReadableChunk);
+
+  if (!candidate) throw new Error("这本书还没有可阅读的正文");
+  return adapter.readChunk(bookId, candidate.id, signal);
 }
 
 function highlightRanges(text: string, annotations: CoReadingAnnotation[]) {

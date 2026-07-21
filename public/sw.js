@@ -1,4 +1,4 @@
-const CACHE_NAME = "ocean-shell-v28";
+const CACHE_NAME = "ocean-shell-v29";
 const APP_ROOT = new URL("./", self.registration.scope).pathname;
 const SHELL = [APP_ROOT, `${APP_ROOT}manifest.webmanifest`, `${APP_ROOT}assets/brand/ocean-icon-192.png`, `${APP_ROOT}assets/brand/ocean-icon-512.png`];
 self.addEventListener("install", (event) => { event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL))); self.skipWaiting(); });

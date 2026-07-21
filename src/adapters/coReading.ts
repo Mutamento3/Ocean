@@ -145,6 +145,7 @@ export class GatewayCoReadingAdapter implements CoReadingAdapter {
   private async json<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...init,
+      credentials: "include",
       headers: { "Content-Type": "application/json", ...init?.headers },
     });
     if (!response.ok) throw new Error(`Co-Reading ${response.status}: ${await response.text()}`);
