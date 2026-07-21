@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { gatewayClient, gatewayIsConnected, syncOrQueue } from "../sync/gatewaySync";
 
@@ -30,21 +30,62 @@ const INITIAL_COUNTDOWNS: CountdownEvent[] = [];
 const INITIAL_TODOS: TodoItem[] = [];
 const INITIAL_NOTES: PaperNote[] = [];
 
+interface PresenceStatus { userLastSeenAt?: string; companionLastActiveAt?: string }
+
+function relativePresence(value: string | undefined, suffix: string, emptyText: string) {
+  if (!value) return emptyText;
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) return emptyText;
+  const elapsed = Math.max(0, Date.now() - timestamp);
+  const minutes = Math.floor(elapsed / 60_000);
+  if (minutes < 1) return `刚刚 ${suffix}`;
+  if (minutes < 60) return `${minutes}分钟前 ${suffix}`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}小时前 ${suffix}`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}天前 ${suffix}`;
+  return `${new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric" }).format(new Date(timestamp))} ${suffix}`;
+}
+
 export function useHomeStore() {
   const [countdowns, setCountdowns] = usePersistentState("ocean:home:countdowns", INITIAL_COUNTDOWNS);
   const [todos, setTodos] = usePersistentState("ocean:home:todos", INITIAL_TODOS);
   const [notes, setNotes] = usePersistentState("ocean:home:notes", INITIAL_NOTES);
-  const [presence] = usePersistentState("ocean:home:relationship", { userLastSeen: "尚无记录", companionLastSeen: "尚无记录", daysTogether: 0 });
+  const [presence, setPresence] = useState<PresenceStatus>({});
+  const [, setPresenceClock] = useState(0);
   const [relationshipSettings] = usePersistentState<RelationshipSettings>("ocean:relationship-settings", DEFAULT_RELATIONSHIP_SETTINGS);
   const relationship = {
-    userLastSeen: presence.userLastSeen,
-    companionLastSeen: presence.companionLastSeen,
+    userLastSeen: relativePresence(presence.userLastSeenAt, "小鱼来过", "小鱼还没有来过"),
+    companionLastSeen: relativePresence(presence.companionLastActiveAt, "小俞出没", "小俞还没有出没"),
     daysTogether: daysSince(relationshipSettings.startDate),
     startLabel: relationshipSettings.startLabel.trim() || DEFAULT_RELATIONSHIP_SETTINGS.startLabel,
   };
   const syncHome = (next: Partial<{ countdowns: CountdownEvent[]; todos: TodoItem[] }>) => {
     void syncOrQueue("home", { countdowns, todos, notes, relationship, ...next });
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    const refreshPresence = async () => {
+      if (!gatewayIsConnected()) return;
+      try {
+        const next = await gatewayClient.getPresence();
+        if (!cancelled) setPresence(next);
+      } catch { /* Presence remains unavailable while the Gateway is offline. */ }
+    };
+    void refreshPresence();
+    const onPresenceUpdated = () => void refreshPresence();
+    window.addEventListener("ocean:presence-updated", onPresenceUpdated);
+    const timer = window.setInterval(() => {
+      setPresenceClock((value) => value + 1);
+      void refreshPresence();
+    }, 60_000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("ocean:presence-updated", onPresenceUpdated);
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     const clean = () => {

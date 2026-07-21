@@ -68,6 +68,8 @@ export class OceanGatewayClient {
   }
   getHome<T>() { return this.json<T | null>("/v1/home"); }
   saveHome(payload: unknown) { return this.json<unknown>("/v1/home", { method: "PUT", body: JSON.stringify(payload) }); }
+  getPresence() { return this.json<{ userLastSeenAt?: string; companionLastActiveAt?: string }>("/v1/presence"); }
+  markUserVisit() { return this.json<{ userLastSeenAt?: string; companionLastActiveAt?: string }>("/v1/presence/visit", { method: "POST", body: "{}" }); }
   listPaperNotes(date?: string, includeFuture = false) { return this.json<OceanPaperNoteResponse>(`/v1/paper-notes${date ? `?date=${encodeURIComponent(date)}${includeFuture ? "&all=true" : ""}` : includeFuture ? "?all=true" : ""}`); }
   generatePaperNotes(targetDate?: string, force = false) { return this.json<{ status: "generated" | "existing" | "skipped"; reason?: string; package?: OceanPaperNoteResponse }>("/v1/paper-notes/generate", { method: "POST", body: JSON.stringify({ targetDate, force }) }); }
   listMemoryCandidates<T>() { return this.json<T[]>("/v1/memory/candidates"); }

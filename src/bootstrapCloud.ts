@@ -33,6 +33,8 @@ async function recoverGatewayConnection() {
       window.localStorage.setItem("ocean:connections", JSON.stringify(connections));
       await flushOutbox(true);
       await restoreFromGateway();
+      await client.markUserVisit().catch(() => undefined);
+      window.dispatchEvent(new CustomEvent("ocean:presence-updated"));
       window.dispatchEvent(new CustomEvent("ocean:gateway-recovered"));
     } catch {
       const connections = readConnections();
@@ -96,6 +98,8 @@ export async function bootstrapCloudGateway() {
 
     await restoreFromGateway().catch(() => undefined);
     await flushOutbox(true).catch(() => undefined);
+    await client.markUserVisit().catch(() => undefined);
+    window.dispatchEvent(new CustomEvent("ocean:presence-updated"));
   } catch {
     // A public/open-source build can intentionally have no hosted Gateway.
     // In that case the normal first-run wizard and Mock path remain available.

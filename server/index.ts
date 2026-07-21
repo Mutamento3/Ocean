@@ -542,7 +542,12 @@ export async function createOceanGateway(dataPath?: string) {
         if (provider.kind !== "mock" && !provider.apiKey) return sendJson(response, 409, { error: "provider_not_configured", providerId, message: `Set ${provider.apiKeyEnv} on Ocean Gateway` });
         return sendJson(response, 200, await providers.test(providerId));
       }
-      if (request.method === "POST" && url.pathname === "/v1/chat/stream") { await store.markFreeTimeUserActivity(); return void await streamChat(request, response, providers, memory, fishing); }
+      if (request.method === "POST" && url.pathname === "/v1/chat/stream") {
+        await store.markFreeTimeUserActivity();
+        await streamChat(request, response, providers, memory, fishing);
+        await store.markCompanionActivity();
+        return;
+      }
       if (request.method === "GET" && url.pathname === "/v1/projects") return sendJson(response, 200, store.listProjects());
       if (request.method === "POST" && url.pathname === "/v1/projects") {
         try {
@@ -741,6 +746,8 @@ export async function createOceanGateway(dataPath?: string) {
       }
       if (request.method === "GET" && url.pathname === "/v1/home") return sendJson(response, 200, store.getHome());
       if (request.method === "PUT" && url.pathname === "/v1/home") return sendJson(response, 200, await store.saveHome(await body(request)));
+      if (request.method === "GET" && url.pathname === "/v1/presence") return sendJson(response, 200, store.getPresence());
+      if (request.method === "POST" && url.pathname === "/v1/presence/visit") return sendJson(response, 200, await store.markUserVisit());
       if (request.method === "GET" && url.pathname === "/v1/paper-notes") {
         const date = url.searchParams.get("date") || new Intl.DateTimeFormat("en-CA", { timeZone: process.env.OCEAN_TIME_ZONE?.trim() || "Asia/Shanghai" }).format(new Date());
         const notePackage = store.getPaperNotePackage(date);

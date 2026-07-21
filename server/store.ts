@@ -65,7 +65,12 @@ export interface StoredPaperNotePackage {
   generatedAt: string;
   notes: StoredPaperNote[];
 }
-interface RuntimeData { projects: StoredProject[]; conversations: StoredConversation[]; continuities: StoredContinuity[]; candidates: StoredCandidate[]; home?: unknown; freeTime?: FreeTimeConfig; freeTimeRuns: StoredFreeTimeRun[]; freeTimeLastUserActivityAt?: string; pushSubscriptions: StoredPushSubscription[]; paperNotePackages: StoredPaperNotePackage[]; paperNoteLastAttemptAt?: string }
+interface StoredPresence {
+  currentUserVisitAt?: string;
+  previousUserVisitAt?: string;
+  companionLastActiveAt?: string;
+}
+interface RuntimeData { projects: StoredProject[]; conversations: StoredConversation[]; continuities: StoredContinuity[]; candidates: StoredCandidate[]; home?: unknown; freeTime?: FreeTimeConfig; freeTimeRuns: StoredFreeTimeRun[]; freeTimeLastUserActivityAt?: string; presence?: StoredPresence; pushSubscriptions: StoredPushSubscription[]; paperNotePackages: StoredPaperNotePackage[]; paperNoteLastAttemptAt?: string }
 
 const defaultDataPath = () => join(process.cwd(), "server", "data", "runtime.json");
 const EMPTY: RuntimeData = { projects: [], conversations: [], continuities: [], candidates: [], freeTimeRuns: [], pushSubscriptions: [], paperNotePackages: [] };
@@ -74,7 +79,7 @@ export class JsonStore {
   private data: RuntimeData = structuredClone(EMPTY);
   constructor(private readonly dataPath = defaultDataPath()) {}
   async initialize() {
-    try { const saved = JSON.parse(await readFile(this.dataPath, "utf8")) as Partial<RuntimeData>; this.data = { projects: saved.projects ?? [], conversations: saved.conversations ?? [], continuities: saved.continuities ?? [], candidates: saved.candidates ?? [], home: saved.home, freeTime: saved.freeTime, freeTimeRuns: saved.freeTimeRuns ?? [], freeTimeLastUserActivityAt: saved.freeTimeLastUserActivityAt, pushSubscriptions: saved.pushSubscriptions ?? [], paperNotePackages: saved.paperNotePackages ?? [], paperNoteLastAttemptAt: saved.paperNoteLastAttemptAt }; }
+    try { const saved = JSON.parse(await readFile(this.dataPath, "utf8")) as Partial<RuntimeData>; this.data = { projects: saved.projects ?? [], conversations: saved.conversations ?? [], continuities: saved.continuities ?? [], candidates: saved.candidates ?? [], home: saved.home, freeTime: saved.freeTime, freeTimeRuns: saved.freeTimeRuns ?? [], freeTimeLastUserActivityAt: saved.freeTimeLastUserActivityAt, presence: saved.presence, pushSubscriptions: saved.pushSubscriptions ?? [], paperNotePackages: saved.paperNotePackages ?? [], paperNoteLastAttemptAt: saved.paperNoteLastAttemptAt }; }
     catch { await mkdir(dirname(this.dataPath), { recursive: true }); await this.flush(); }
   }
   private async flush() { await writeFile(this.dataPath, JSON.stringify(this.data, null, 2), "utf8"); }
@@ -162,6 +167,40 @@ export class JsonStore {
   listFreeTimeRuns() { return [...this.data.freeTimeRuns].reverse(); }
   getFreeTimeLastUserActivityAt() { return this.data.freeTimeLastUserActivityAt; }
   async markFreeTimeUserActivity(at = new Date().toISOString()) { this.data.freeTimeLastUserActivityAt = at; await this.flush(); return at; }
+  getPresence() {
+    const validIso = (value?: string) => value && !Number.isNaN(Date.parse(value)) ? new Date(value).toISOString() : undefined;
+    const latest = (values: Array<string | undefined>) => values
+      .map(validIso)
+      .filter((value): value is string => Boolean(value))
+      .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
+    const companionLastActiveAt = latest([
+      this.data.presence?.companionLastActiveAt,
+      ...this.data.conversations.map((conversation) => conversation.updatedAt),
+      ...this.data.freeTimeRuns.map((run) => run.completedAt),
+      ...this.data.paperNotePackages.map((notePackage) => notePackage.generatedAt),
+    ]);
+    return {
+      userLastSeenAt: validIso(this.data.presence?.previousUserVisitAt) ?? validIso(this.data.freeTimeLastUserActivityAt),
+      companionLastActiveAt,
+    };
+  }
+  async markUserVisit(at = new Date().toISOString()) {
+    const nextAt = new Date(at).toISOString();
+    const currentAt = this.data.presence?.currentUserVisitAt;
+    const startsNewVisit = !currentAt || Date.parse(nextAt) - Date.parse(currentAt) >= 30 * 60_000;
+    this.data.presence = {
+      ...this.data.presence,
+      currentUserVisitAt: nextAt,
+      ...(startsNewVisit && currentAt ? { previousUserVisitAt: currentAt } : {}),
+    };
+    await this.flush();
+    return this.getPresence();
+  }
+  async markCompanionActivity(at = new Date().toISOString()) {
+    this.data.presence = { ...this.data.presence, companionLastActiveAt: new Date(at).toISOString() };
+    await this.flush();
+    return this.getPresence();
+  }
   async saveFreeTimeRun(input: Omit<StoredFreeTimeRun, "id" | "createdAt">) {
     const run: StoredFreeTimeRun = { ...input, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     this.data.freeTimeRuns.push(run);
