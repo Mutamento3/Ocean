@@ -84,6 +84,10 @@
 - Each compact outcome row is a real button. It opens the shared detent-based bottom sheet with the complete summary, local timestamp, valence, and arousal; outside tap and the sheet handle dismiss it.
 - Empty state remains data-derived and never fabricates actions or affect values. Manual trigger continues to write a real Gateway outcome rather than adding a local mock row.
 
+### Palace / Daily Impression
+
+- The Daily Impression card keeps the calibrated `333px` baseline as a minimum height rather than a fixed height. Long Memory 3.0 bodies, preserved paragraph breaks, and unbroken identifiers expand the card naturally inside the existing Palace scroll container, so the surface always remains behind its content.
+
 ### Shared chat-state refinements
 
 - The access/loading status line uses the same three-dot pulse component on both sides of its live status copy. Ellipsis characters are not embedded in the copy, so both visual groups animate and reduced-motion mode can disable them consistently without changing the line's geometry.

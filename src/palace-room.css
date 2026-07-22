@@ -345,7 +345,7 @@
 .palace-calendar-card.rows-6 .palace-calendar-grid { row-gap: 2px; }
 .palace-calendar-card.rows-6 .palace-calendar-grid button,
 .palace-calendar-card.rows-6 .palace-calendar-grid > span { height: 20px; }
-.palace-impression-card { height: 333px; padding: 15px 8px 18px; }
+.palace-impression-card { min-height: 333px; padding: 15px 8px 18px; }
 .palace-impression-card h2 {
   font-family: var(--font-display);
   font-size: 24px;
@@ -368,6 +368,8 @@
   letter-spacing: 2px;
   line-height: 1.58;
   margin: 0 0 7px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .palace-impression-card .impression-values { color: var(--ink); letter-spacing: 0; line-height: 1.55; }
 
