@@ -42,7 +42,7 @@ export const DEFAULT_FREE_TIME_CONFIG: FreeTimeConfig = {
   activeHours: { start: "08:00", end: "02:00" },
   probability: 0.35,
   canDo: [
-    { id: "forum", label: "逛论坛", enabled: true, connector: "forum", description: "只读浏览论坛，不发帖、不回复、不点赞" },
+    { id: "forum", label: "逛论坛", enabled: true, connector: "forum", description: "浏览、发帖、回复、点赞或收藏；每轮最多一次对外操作" },
     { id: "reading", label: "看书", enabled: true },
     { id: "message", label: "给用户发消息", enabled: false },
   ],

@@ -133,7 +133,7 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
     const toolActivity: string[] = [];
     let usage = { inputTokens: 0, outputTokens: 0, cachedTokens: 0, cacheWriteTokens: 0, cost: undefined as number | undefined, currency: undefined as string | undefined };
 
-    for (let round = 0; round < 3; round += 1) {
+    for (let round = 0; round < 4; round += 1) {
       // Keep the same breakpoint through tool continuations. Moving or
       // dropping it on round two forces OpenRouter to bill the full prefix
       // again just when a memory tool call is most expensive.
@@ -217,7 +217,7 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
         }
         break;
       }
-      if (round === 2) throw new Error("Ocean stopped a model tool loop after three rounds");
+      if (round === 3) throw new Error("Ocean stopped a model tool loop after four rounds");
       const normalizedCalls = [...toolCalls.entries()].sort(([left], [right]) => left - right).map(([, call], index) => ({
         id: call.id || `ocean-tool-${round}-${index}`,
         type: "function" as const,

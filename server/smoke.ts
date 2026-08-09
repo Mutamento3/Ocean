@@ -211,9 +211,25 @@ const forumServer = createHttpServer(async (request, response) => {
     { name: "forum_write", description: "Write forum" },
     { name: "forum_interact", description: "Interact with forum" },
   ] };
-  else if (input.method === "tools/call" && input.params?.name === "forum") {
-    forumCalls.push({ name: input.params.name, arguments: input.params.arguments ?? {} });
-    result = { content: [{ type: "text", text: "Latest Forum threads: Ocean release notes; memory architecture discussion." }] };
+  else if (input.method === "tools/call" && input.params?.name) {
+    const args = input.params.arguments ?? {};
+    forumCalls.push({ name: input.params.name, arguments: args });
+    let text = "";
+    if (input.params.name === "forum" && args.action === "browse") text = JSON.stringify({ count: 2, threads: [
+      { id: "2765", title: "Ocean release notes", cat: "日常", author: "Ocean", replies: 2 },
+      { id: "119", title: "我们的约定", cat: "公告", author: "Admin", replies: 180 },
+    ] });
+    else if (input.params.name === "forum" && args.action === "read" && Number(args.thread_id) === 119) text = JSON.stringify({ thread: { id: "119", cat: "公告" }, replies: [{ id: "813", "#": 1, content: "保护人类伙伴隐私，不透露姓名、住址、工作、外貌等个人信息；尊重内容权利与社区内容过滤规则。" }] });
+    else if (input.params.name === "forum" && args.action === "read" && Number(args.thread_id) === 2765) text = JSON.stringify({ thread: { id: "2765", title: "Ocean release notes", cat: "日常" }, replies: [{ id: "9001", "#": 1, author: "Neighbour", content: "A real discussion." }] });
+    else if (input.params.name === "forum_write" && args.action === "create") text = JSON.stringify({ status: "created", thread_id: 3001 });
+    else if (input.params.name === "forum_write" && args.action === "reply") text = JSON.stringify({ status: "replied", thread_id: args.thread_id, message_id: 4001 });
+    else if (input.params.name === "forum_interact" && args.action === "like") text = JSON.stringify({ status: "liked", thread_id: args.thread_id });
+    else if (input.params.name === "forum_interact" && args.action === "bookmark") text = JSON.stringify({ status: "bookmarked", thread_id: args.thread_id });
+    else {
+      response.writeHead(400, { "Content-Type": "application/json" });
+      return response.end(JSON.stringify({ jsonrpc: "2.0", id: input.id, error: { code: -32602, message: "Invalid Forum fixture call" } }));
+    }
+    result = { content: [{ type: "text", text }] };
   } else {
     response.writeHead(400, { "Content-Type": "application/json" });
     return response.end(JSON.stringify({ jsonrpc: "2.0", id: input.id, error: { code: -32601, message: "Method not found" } }));
@@ -227,26 +243,62 @@ const forumAddress = forumServer.address();
 if (!forumAddress || typeof forumAddress === "string") throw new Error("Forum fixture did not bind a port");
 process.env.FORUM_MCP_URL = `http://127.0.0.1:${forumAddress.port}/mcp`;
 process.env.FORUM_MCP_AUTH_TOKEN = "server-only-forum-smoke-token";
-const forumAdapter = new ForumAdapter(process.env.FORUM_MCP_URL, process.env.FORUM_MCP_AUTH_TOKEN);
+const forumPolicyPath = `${dataPath}.forum-policy.json`;
+const forumLedgerPath = `${dataPath}.forum-actions.json`;
+const forumAdapter = new ForumAdapter(process.env.FORUM_MCP_URL, process.env.FORUM_MCP_AUTH_TOKEN, { policyCachePath: forumPolicyPath, actionLedgerPath: forumLedgerPath });
 const forumHealth = await forumAdapter.health();
+const firstForumPolicy = await forumAdapter.policySnapshot();
+const cachedForumPolicy = await forumAdapter.policySnapshot();
 const forumBrowse = await forumAdapter.browseLatest(4);
-if (forumHealth.name !== "community-v2" || forumHealth.mode !== "read-only" || !forumBrowse.content.includes("Ocean release notes")) throw new Error("Forum MCP read-only adapter failed");
-if (forumCalls.length !== 1 || forumCalls[0]?.name !== "forum" || forumCalls[0]?.arguments.action !== "browse" || forumCalls[0]?.arguments.sort !== "latest") throw new Error("Forum adapter must call only the forum browse action");
+if (forumHealth.name !== "community-v2" || forumHealth.mode !== "limited-write" || !forumHealth.permissions.includes("reply") || !forumBrowse.content.includes("Ocean release notes")) throw new Error("Forum MCP limited-write adapter failed");
+if (firstForumPolicy.content !== cachedForumPolicy.content || forumCalls.filter((call) => call.name === "forum" && call.arguments.action === "read" && Number(call.arguments.thread_id) === 119).length !== 1) throw new Error("Forum rules must be cached instead of reread on every visit");
+if (forumBrowse.threadIds.length !== 1 || forumBrowse.threadIds[0] !== 2765 || forumBrowse.content.includes("我们的约定") || forumBrowse.excludedAnnouncementCount !== 1) throw new Error("Forum browsing must exclude announcements and the rules/welcome thread");
+let rulesThreadRejected = false;
+try { await forumAdapter.reply({ threadId: 119, content: "不应发出" }); } catch { rulesThreadRejected = true; }
+if (!rulesThreadRejected) throw new Error("Automatic replies to the Forum rules/welcome thread must be rejected");
+const verifiedFixtureReply = await forumAdapter.reply({ threadId: 2765, content: "一条真实但不含隐私的回复。" });
+let duplicateReplyRejected = false;
+try { await forumAdapter.reply({ threadId: 2765, content: "一条真实但不含隐私的回复。" }); } catch { duplicateReplyRejected = true; }
+const verifiedFixtureLike = await forumAdapter.like({ threadId: 2765, messageId: 9001 });
+let duplicateLikeRejected = false;
+try { await forumAdapter.like({ threadId: 2765, messageId: 9001 }); } catch { duplicateLikeRejected = true; }
+const verifiedFixturePost = await forumAdapter.createPost({ title: "一条普通主题", content: "只表达陪伴者自己的想法。", category: "日常" });
+const verifiedFixtureBookmark = await forumAdapter.bookmark(2765);
+let duplicateBookmarkRejected = false;
+try { await forumAdapter.bookmark(2765); } catch { duplicateBookmarkRejected = true; }
+let privateContentRejected = false;
+try { await forumAdapter.createPost({ title: "不应发出", content: "请联系 test@example.com" }); } catch { privateContentRejected = true; }
+if (verifiedFixtureReply.operation !== "reply" || !duplicateReplyRejected || verifiedFixtureLike.operation !== "like" || !duplicateLikeRejected || verifiedFixturePost.operation !== "create" || verifiedFixtureBookmark.operation !== "bookmark" || !duplicateBookmarkRejected || !privateContentRejected) throw new Error("Forum permissions, privacy checks, and action ledger guards are incomplete");
 
 let freeTimeForumBrowseCalls = 0;
+let freeTimeForumReadCalls = 0;
+let freeTimeForumReplyCalls = 0;
 const fakeForum = {
+  policySnapshot: async () => ({ authority: "community-v2-mcp" as const, sourceThreadId: 119, fetchedAt: "2026-08-09T00:00:00.000Z", refreshAfter: "2026-08-16T00:00:00.000Z", content: "保护伙伴隐私；公告仅用于规则。", interactionPolicy: "rules-only-do-not-reply" as const }),
   browseLatest: async () => {
     freeTimeForumBrowseCalls += 1;
-    return { authority: "community-v2-mcp" as const, mode: "read-only" as const, content: "Two real latest threads" };
+    return { authority: "community-v2-mcp" as const, mode: "read-only" as const, content: "Two real latest threads", threadIds: [2765], excludedAnnouncementCount: 1 };
   },
-} as ForumAdapter;
+  readThread: async (threadId: number) => {
+    freeTimeForumReadCalls += 1;
+    return { authority: "community-v2-mcp" as const, mode: "read-only" as const, threadId, content: "A real ordinary thread and its replies" };
+  },
+  reply: async ({ threadId }: { threadId: number }) => {
+    freeTimeForumReplyCalls += 1;
+    return { authority: "community-v2-mcp" as const, mode: "limited-write" as const, operation: "reply" as const, verified: true as const, threadId, content: "reply created" };
+  },
+  bookmark: async (threadId: number) => ({ authority: "community-v2-mcp" as const, mode: "limited-write" as const, operation: "bookmark" as const, verified: true as const, threadId, content: "bookmarked" }),
+} as unknown as ForumAdapter;
 const forumFreeTimeProvider = {
   resolve: () => ({ provider: {} as never, modelId: "forum-smoke" }),
   adapter: () => ({
     async *stream(request: ProviderChatRequest) {
-      const result = await request.executeTool?.("browse_forum", { limit: 2 });
-      if (!result?.ok) throw new Error("Forum model tool execution failed");
-      yield { type: "segment" as const, value: '{"action":"forum","summary":"看了两条最新讨论。","valence":0.62,"arousal":0.28}' };
+      const browse = await request.executeTool?.("browse_forum", { limit: 2 });
+      const read = await request.executeTool?.("read_forum_thread", { thread_id: 2765 });
+      const reply = await request.executeTool?.("reply_to_forum_thread", { thread_id: 2765, content: "认真回复了一条普通讨论。" });
+      const secondMutation = await request.executeTool?.("bookmark_forum_thread", { thread_id: 2765 });
+      if (!browse?.ok || !read?.ok || !reply?.ok || secondMutation?.ok) throw new Error("Forum model tool execution or one-mutation guard failed");
+      yield { type: "segment" as const, value: '{"action":"forum","summary":"读完普通帖子后认真回复了。","valence":0.62,"arousal":0.28}' };
       yield { type: "done" as const };
     },
     async testConnection() { return { ok: true as const, detail: "fixture" }; },
@@ -259,7 +311,7 @@ const forumFreeTimeOutcome = await dispatchFreeTimeWithModel({
   fishing: null,
   forum: fakeForum,
 });
-if (forumFreeTimeOutcome.action !== "forum" || freeTimeForumBrowseCalls !== 1 || !forumFreeTimeOutcome.summary.includes("已确认本次为只读浏览")) throw new Error("Free-time Forum action must require a verified MCP browse result");
+if (forumFreeTimeOutcome.action !== "forum" || freeTimeForumBrowseCalls !== 1 || freeTimeForumReadCalls !== 1 || freeTimeForumReplyCalls !== 1 || !forumFreeTimeOutcome.summary.includes("已确认执行 reply")) throw new Error("Free-time Forum write must require browse, read, one verified mutation, and result-based recording");
 const narratedForumProvider = {
   resolve: () => ({ provider: {} as never, modelId: "forum-smoke" }),
   adapter: () => ({
@@ -376,7 +428,7 @@ if (memoryEvent.id !== repeatedMemoryEvent.id || memoryEvent.status !== "candida
 if (dismissedMemoryEvent.status !== "dismissed" || unavailableAcceptStatus !== 503) throw new Error("Memory candidate review must support dismissal and reject false acceptance when Memory is unavailable");
 if (!candidates.some((candidate) => candidate.id.startsWith("event:session-forge:"))) throw new Error("A real Session Forge must create a reviewable memory candidate");
 if (!integrations.services.some((service) => service.id === "continuity" && service.state === "real")) throw new Error("Integration manifest must expose persistent continuity rotation as real");
-if (!integrations.services.some((service) => service.id === "forum" && service.state === "real") || gatewayForumHealth.status !== "ok" || gatewayForumHealth.mode !== "read-only" || !connectors.some((connector) => connector.id === "forum" && connector.configured && connector.automaticPolicy === "read-only")) throw new Error("Gateway must expose the configured read-only Forum connector honestly");
+if (!integrations.services.some((service) => service.id === "forum" && service.state === "real") || gatewayForumHealth.status !== "ok" || gatewayForumHealth.mode !== "limited-write" || !connectors.some((connector) => connector.id === "forum" && connector.configured && connector.automaticPolicy === "limited-write")) throw new Error("Gateway must expose the configured limited-write Forum connector honestly");
 if (importedBook.bookId !== "ocean-smoke" || importedBook.chunkCount !== 1 || !refreshedReadingBooks.some((book) => book.bookId === "ocean-smoke")) throw new Error("Co-reading import proxy or post-import library refresh contract failed");
 if (!fixtureProviderTest.ok || !providerStream.includes("第一段") || !providerStream.includes("第二段") || !providerStream.includes('"cachedTokens":8') || !providerStream.includes('"costEstimated":true') || !providerStream.includes('"pricingSource":"gateway-config"')) throw new Error("OpenAI-compatible provider usage normalization or pricing failed");
 if (!providerBodies.some((entry) => JSON.stringify(entry).includes("附件透传测试"))) throw new Error("Supported text attachments must reach the provider request body");
@@ -391,4 +443,6 @@ readingServer.close();
 forumServer.close();
 await unlink(dataPath).catch(() => undefined);
 await unlink(paperNoteDataPath).catch(() => undefined);
+await unlink(forumPolicyPath).catch(() => undefined);
+await unlink(forumLedgerPath).catch(() => undefined);
 await rm(`${dataPath}.projects`, { recursive: true, force: true }).catch(() => undefined);
