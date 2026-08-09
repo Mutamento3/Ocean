@@ -5,7 +5,7 @@ import { getGatewayBaseUrl } from "../config/gateway";
 
 export interface GatewayHealth { status: "ok" | "degraded"; version: string; providers: string[] }
 export interface ReadingHealth { status: "ok"; provider: "co-reading-mcp"; books: number; baseUrl: string }
-export interface ForumHealth { status: "ok"; provider: "community-v2-mcp"; name: string; version: string; tools: string[]; mode: "read-only" }
+export interface ForumHealth { status: "ok"; provider: "community-v2-mcp"; name: string; version: string; tools: string[]; mode: "limited-write"; permissions: Array<"browse" | "create" | "reply" | "like" | "bookmark">; rulesThreadId: number }
 export interface OceanAccessStatus { required: boolean; authenticated: boolean }
 export interface OceanProject {
   id: string;

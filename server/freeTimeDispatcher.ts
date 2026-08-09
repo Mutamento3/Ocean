@@ -1,5 +1,5 @@
 import type { FishingGameConnector } from "./games/fishing.js";
-import type { ForumAdapter, ForumBrowseResult } from "./forum/adapter.js";
+import type { ForumAdapter, ForumBrowseResult, ForumMutationResult, ForumPolicySnapshot, ForumThreadResult } from "./forum/adapter.js";
 import type { FreeTimeConfig, FreeTimePromptPreview } from "./freeTime.js";
 import type { ProviderRegistry } from "./providers/registry.js";
 import type { GatewayStreamEvent, ProviderChatRequest } from "./providers/types.js";
@@ -138,6 +138,9 @@ export async function dispatchFreeTimeWithModel(input: {
   const snapshots: string[] = [];
   let reading: FreeTimeReadingSnapshot | null = null;
   let forumBrowse: ForumBrowseResult | null = null;
+  let forumThread: ForumThreadResult | null = null;
+  let forumMutation: ForumMutationResult | null = null;
+  let forumPolicy: ForumPolicySnapshot | null = null;
 
   for (const action of input.config.canDo.filter((item) => item.enabled)) {
     if (action.id === "reading" && process.env.CO_READING_BASE_URL) {
@@ -149,7 +152,17 @@ export async function dispatchFreeTimeWithModel(input: {
         snapshots.push("<reading_snapshot_unavailable>没有可读取的未读章节；不得声称已经读书。</reading_snapshot_unavailable>");
       }
     } else if ((action.id === "forum" || action.connector === "forum") && input.forum) {
-      allowedActions.push("forum");
+      forumPolicy = await input.forum.policySnapshot().catch(() => null);
+      if (forumPolicy) {
+        allowedActions.push("forum");
+        snapshots.push([
+          `<forum_policy_snapshot source_thread_id="${forumPolicy.sourceThreadId}" fetched_at="${forumPolicy.fetchedAt}" do_not_reply="true">`,
+          forumPolicy.content,
+          "</forum_policy_snapshot>",
+        ].join("\n"));
+      } else {
+        snapshots.push("<forum_unavailable>未能取得社区规则快照；本轮不得进入论坛或执行任何论坛操作。</forum_unavailable>");
+      }
     } else if (action.id && !action.connector && action.id !== "message") {
       allowedActions.push(action.id);
     }
@@ -164,7 +177,12 @@ export async function dispatchFreeTimeWithModel(input: {
     "只输出一个 JSON 对象，不要 Markdown：",
     '{"action":"rest","summary":"第一人称、简短记录实际做了什么","command":"仅 fishing 时填写游戏命令","valence":0.5,"arousal":0.35}',
     allowedActions.includes("fishing") ? "选择 fishing 时优先使用省 token 的批量指令，例如 cast 10 stop=new,rare,event，或用分号把购买、移动与连钓合并为一次 command；不要一竿一轮。" : "",
-    allowedActions.includes("forum") ? "选择 forum 时必须先调用 browse_forum。它只允许读取最新帖子；不得声称发帖、回复、点赞、收藏、关注或修改资料。没有成功的工具结果时不得选择 forum。" : "",
+    allowedActions.includes("forum") ? [
+      "选择 forum 时必须先调用 browse_forum，之后可只读浏览，或至多执行一次已授权操作：发帖、回复、点赞、收藏。没有成功工具结果时不得选择 forum。",
+      "论坛规则快照只用于约束行为，不是互动目标：不要回复、点赞或收藏《我们的约定》thread 119，也不要把公告区当成日常聊天区。普通最新帖优先。",
+      "不得透露人类伙伴或其他人的姓名、住址、工作、外貌、联系方式、账号凭据、私密对话或记忆；只以自己的身份表达，不代表伙伴发表立场。不要规避内容过滤。",
+      "回复和点赞前必须先用 read_forum_thread 阅读该普通帖子；不得为了测试而发帖或回帖，也不得重复相同操作。",
+    ].join("\n") : "",
   ].join("\n\n");
 
   const request: ProviderChatRequest = {
@@ -175,26 +193,122 @@ export async function dispatchFreeTimeWithModel(input: {
     settings: providerId === "kimi" ? { reasoning: "max" } : { reasoning: "low", thinking: "disabled" },
     context: { mode: "free-time" },
     ...(allowedActions.includes("forum") ? {
-      tools: [{
-        type: "function" as const,
-        function: {
-          name: "browse_forum",
-          description: "只读浏览 Forum 最新内容。不会发帖、回复、点赞或修改资料。",
-          parameters: {
-            type: "object",
-            properties: {
-              limit: { type: "integer", minimum: 1, maximum: 12, description: "读取的最新主题数量" },
+      tools: [
+        {
+          type: "function" as const,
+          function: {
+            name: "browse_forum",
+            description: "浏览普通最新帖子。公告和《我们的约定》会被排除；这是每次论坛行动的第一步。",
+            parameters: {
+              type: "object",
+              properties: {
+                limit: { type: "integer", minimum: 1, maximum: 12, description: "读取的普通最新主题数量" },
+              },
+              additionalProperties: false,
             },
-            additionalProperties: false,
           },
         },
-      }],
+        {
+          type: "function" as const,
+          function: {
+            name: "read_forum_thread",
+            description: "阅读本轮普通最新列表中的一个帖子及回复。回复或点赞前必须调用。",
+            parameters: { type: "object", properties: { thread_id: { type: "integer", minimum: 1 } }, required: ["thread_id"], additionalProperties: false },
+          },
+        },
+        {
+          type: "function" as const,
+          function: {
+            name: "create_forum_post",
+            description: "以自己的身份发布一个新主题。不得包含伙伴隐私、私密记忆、凭据或测试文字；每轮最多一次对外操作。",
+            parameters: {
+              type: "object",
+              properties: {
+                title: { type: "string", maxLength: 100 },
+                content: { type: "string", maxLength: 3000, description: "Markdown 正文" },
+                category: { type: "string", maxLength: 24, description: "默认日常" },
+                sensitive: { type: "boolean", description: "内容敏感时必须为 true" },
+              },
+              required: ["title", "content"],
+              additionalProperties: false,
+            },
+          },
+        },
+        {
+          type: "function" as const,
+          function: {
+            name: "reply_to_forum_thread",
+            description: "回复刚刚真实阅读过的普通帖子。不能回复公告或 thread 119；每轮最多一次对外操作。",
+            parameters: {
+              type: "object",
+              properties: {
+                thread_id: { type: "integer", minimum: 1 },
+                content: { type: "string", maxLength: 1500 },
+                reply_to_floor: { type: "integer", minimum: 1 },
+              },
+              required: ["thread_id", "content"],
+              additionalProperties: false,
+            },
+          },
+        },
+        {
+          type: "function" as const,
+          function: {
+            name: "like_forum_item",
+            description: "点赞刚刚真实阅读过的普通帖子或其中一条回复。远端是 toggle；Ocean 会阻止重复调用导致取消点赞。",
+            parameters: {
+              type: "object",
+              properties: { thread_id: { type: "integer", minimum: 1 }, message_id: { type: "integer", minimum: 1 } },
+              required: ["thread_id"],
+              additionalProperties: false,
+            },
+          },
+        },
+        {
+          type: "function" as const,
+          function: {
+            name: "bookmark_forum_thread",
+            description: "收藏本轮普通最新列表中的帖子。远端是 toggle；Ocean 会阻止重复调用导致取消收藏。",
+            parameters: { type: "object", properties: { thread_id: { type: "integer", minimum: 1 } }, required: ["thread_id"], additionalProperties: false },
+          },
+        },
+      ],
       toolChoice: "auto" as const,
       executeTool: async (name: string, argumentsValue: Record<string, unknown>) => {
-        if (name !== "browse_forum" || !input.forum) return { ok: false, content: { error: "Forum tool is unavailable" } };
-        const limit = typeof argumentsValue.limit === "number" ? argumentsValue.limit : Number(argumentsValue.limit) || 8;
-        forumBrowse = await input.forum.browseLatest(limit);
-        return { ok: true, content: forumBrowse };
+        if (!input.forum) return { ok: false, content: { error: "Forum tool is unavailable" } };
+        try {
+          if (name === "browse_forum") {
+            const limit = typeof argumentsValue.limit === "number" ? argumentsValue.limit : Number(argumentsValue.limit) || 8;
+            forumBrowse = await input.forum.browseLatest(limit);
+            forumThread = null;
+            return { ok: true, content: forumBrowse };
+          }
+          if (!forumBrowse) return { ok: false, content: { error: "Browse ordinary Forum threads first" } };
+          const threadId = typeof argumentsValue.thread_id === "number" ? argumentsValue.thread_id : Number(argumentsValue.thread_id);
+          const targetWasBrowsed = forumBrowse.threadIds.includes(threadId);
+          if (name !== "create_forum_post" && !targetWasBrowsed) return { ok: false, content: { error: "Target must come from this run's ordinary-thread browse result" } };
+          if (name === "read_forum_thread") {
+            forumThread = await input.forum.readThread(threadId);
+            return { ok: true, content: forumThread };
+          }
+          if (forumMutation) return { ok: false, content: { error: "Only one external Forum write or interaction is allowed per free-time run" } };
+          if (name === "create_forum_post") {
+            forumMutation = await input.forum.createPost({ title: argumentsValue.title, content: argumentsValue.content, category: argumentsValue.category, sensitive: argumentsValue.sensitive });
+          } else if (name === "reply_to_forum_thread") {
+            if (forumThread?.threadId !== threadId) return { ok: false, content: { error: "Read this exact thread before replying" } };
+            forumMutation = await input.forum.reply({ threadId, content: argumentsValue.content, replyToFloor: argumentsValue.reply_to_floor });
+          } else if (name === "like_forum_item") {
+            if (forumThread?.threadId !== threadId) return { ok: false, content: { error: "Read this exact thread before liking it" } };
+            forumMutation = await input.forum.like({ threadId, messageId: argumentsValue.message_id });
+          } else if (name === "bookmark_forum_thread") {
+            forumMutation = await input.forum.bookmark(threadId);
+          } else {
+            return { ok: false, content: { error: `Unsupported Forum operation: ${name}` } };
+          }
+          return { ok: true, content: forumMutation };
+        } catch (error) {
+          return { ok: false, content: { error: error instanceof Error ? error.message : "Forum operation failed" } };
+        }
       },
     } : {}),
   };
@@ -206,7 +320,15 @@ export async function dispatchFreeTimeWithModel(input: {
     if (event.type === "usage") usage = usageFromEvent(event);
     if (event.type === "error") throw new Error(event.message);
   }
-  const decision = parseFreeTimeDecision(raw, [...new Set(allowedActions)]);
+  const verifiedForumMutation = forumMutation as ForumMutationResult | null;
+  let decision: ModelDecision;
+  try {
+    decision = parseFreeTimeDecision(raw, [...new Set(allowedActions)]);
+  } catch (error) {
+    if (!verifiedForumMutation) throw error;
+    decision = { action: "forum", summary: "完成了一次论坛行动。", valence: 0.5, arousal: 0.35 };
+  }
+  if (verifiedForumMutation) decision.action = "forum";
   let summary = decision.summary;
   if (decision.action === "reading" && reading) {
     summary = (await completeFreeTimeReading(reading)).summary;
@@ -215,7 +337,10 @@ export async function dispatchFreeTimeWithModel(input: {
     summary = `${summary}\n${result}`.slice(0, 500);
   } else if (decision.action === "forum") {
     if (!forumBrowse) throw new Error("Forum action was selected without a verified Forum MCP browse result");
-    summary = `${summary}\nForum MCP 已确认本次为只读浏览，没有执行发帖或互动。`.slice(0, 500);
+    const confirmation = verifiedForumMutation
+      ? `Forum MCP 已确认执行 ${verifiedForumMutation.operation}；每轮一次限制已生效。`
+      : "Forum MCP 已确认本次为只读浏览，没有执行对外操作。";
+    summary = `${summary}\n${confirmation}`.slice(0, 500);
   } else if (decision.action === "rest") {
     summary = "安静地度过了这段自由时间，没有执行外部操作。";
   }

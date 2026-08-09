@@ -29,7 +29,7 @@ type Controls = {
 };
 
 const INITIAL_CAN_DO: CanDoItem[] = [
-  { id: "forum", label: "逛论坛", enabled: true, connector: "forum", description: "只读浏览，不发帖或互动" },
+  { id: "forum", label: "逛论坛", enabled: true, connector: "forum", description: "浏览、发帖、回复、点赞或收藏；每轮最多一次对外操作" },
   { id: "reading", label: "看书", enabled: true },
   { id: "message", label: "给用户发消息", enabled: false },
 ];
