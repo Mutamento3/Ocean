@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-export function usePersistentState<T>(key: string, initialValue: T) {
+export function usePersistentState<T>(key: string, initialValue: T, prepareForStorage?: (value: T) => unknown) {
   const activeKey = useRef(key);
   const [value, setValue] = useState<T>(() => {
     try {
@@ -17,8 +17,8 @@ export function usePersistentState<T>(key: string, initialValue: T) {
       } catch { setValue(initialValue); }
       return;
     }
-    window.localStorage.setItem(key, JSON.stringify(value));
-  }, [initialValue, key, value]);
+    window.localStorage.setItem(key, JSON.stringify(prepareForStorage ? prepareForStorage(value) : value));
+  }, [initialValue, key, prepareForStorage, value]);
   useEffect(() => {
     const receive = (event: Event) => {
       const detail = (event as CustomEvent<{ key: string; value: T }>).detail;

@@ -91,6 +91,8 @@
 
 ### Shared chat-state refinements
 
+- Living Room accepts either text, images, or both. Image-only turns keep the visible user bubble image without fabricating visible copy; a short provider-only instruction carries the otherwise empty turn to the vision model. Phone photos are normalized to a maximum `1280px` vision payload and a separate `480px` history thumbnail. Persisted thumbnails share a bounded budget so accumulated Base64 data cannot eventually block new image sends; current-session previews remain intact, and older released previews retain a named image record.
+- Attachment chips and transient upload notices use the local popover foreground role on their light surface in both day and night modes. The default Ocean pair measures `5.2895:1` in night mode and `5.5061:1` in day mode for normal text.
 - The access/loading status line uses the same three-dot pulse component on both sides of its live status copy. Ellipsis characters are not embedded in the copy, so both visual groups animate and reduced-motion mode can disable them consistently without changing the line's geometry.
 - The send button is disabled only for an empty draft or while the model response stream is active. It unlocks on the stream's `done` event; continuity forging and durable conversation sync finish afterward without extending the visible sending lock.
 - Dynamic model labels may wrap to two lines. The shared model trigger and its expanded-panel anchor grow upward from a fixed bottom baseline, so longer names gain breathing room without moving the composer or adjacent controls.

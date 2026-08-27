@@ -21,6 +21,7 @@ export interface RoomAttachmentAction {
 }
 
 interface RoomChatChromeProps {
+  allowAttachmentOnly?: boolean;
   attachmentActions?: RoomAttachmentAction[];
   input: string;
   inputPlaceholder?: string;
@@ -30,7 +31,7 @@ interface RoomChatChromeProps {
   onInputChange: (value: string) => void;
   onModelClick?: () => void;
   onNightTalkChange?: (value: boolean) => void;
-  onSend: (attachments: ChatAttachment[]) => void;
+  onSend: (attachments: ChatAttachment[]) => boolean | void | Promise<boolean | void>;
   reasoning?: ReasoningSummary | null;
   sendDisabled?: boolean;
   storageRemainingPercent?: number;
@@ -190,8 +191,13 @@ async function fileToAttachment(file: File): Promise<ChatAttachment> {
       reader.onerror = () => reject(new Error("图片读取失败"));
       reader.readAsDataURL(file);
     });
-    const previewDataUrl = await createImagePreview(data);
-    return { id, kind: "image", name: file.name || "相机照片", mimeType: file.type || "image/jpeg", size: file.size, data, previewDataUrl };
+    const optimized = await optimizeImageAttachment(data, file);
+    return {
+      id,
+      kind: "image",
+      name: file.name || "相机照片",
+      ...optimized,
+    };
   }
   const textLike = file.type.startsWith("text/") || /\.(txt|md|markdown|json|csv)$/i.test(file.name);
   if (!textLike) throw new Error("文件附件目前先支持 TXT、Markdown、JSON 与 CSV");
@@ -199,15 +205,23 @@ async function fileToAttachment(file: File): Promise<ChatAttachment> {
   return { id, kind: "text", name: file.name, mimeType: file.type || "text/plain", size: file.size, data: await file.text() };
 }
 
-async function createImagePreview(dataUrl: string) {
-  if (dataUrl.length <= 650_000) return dataUrl;
+function dataUrlByteSize(dataUrl: string) {
+  const payload = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  const padding = payload.endsWith("==") ? 2 : payload.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((payload.length * 3) / 4) - padding);
+}
+
+async function loadImage(dataUrl: string) {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const node = new Image();
     node.onload = () => resolve(node);
     node.onerror = () => reject(new Error("图片预览生成失败"));
     node.src = dataUrl;
   });
-  const maxEdge = 1_280;
+  return image;
+}
+
+function renderImageVariant(image: HTMLImageElement, maxEdge: number, quality: number) {
   const scale = Math.min(1, maxEdge / Math.max(image.naturalWidth, image.naturalHeight));
   const width = Math.max(1, Math.round(image.naturalWidth * scale));
   const height = Math.max(1, Math.round(image.naturalHeight * scale));
@@ -219,10 +233,25 @@ async function createImagePreview(dataUrl: string) {
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
   context.drawImage(image, 0, 0, width, height);
-  return canvas.toDataURL("image/jpeg", 0.82);
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
+async function optimizeImageAttachment(dataUrl: string, file: File) {
+  const image = await loadImage(dataUrl);
+  const data = dataUrl.length <= 650_000 ? dataUrl : renderImageVariant(image, 1_280, 0.82);
+  let previewDataUrl = renderImageVariant(image, 480, 0.72);
+  if (previewDataUrl.length > 180_000) previewDataUrl = renderImageVariant(image, 360, 0.64);
+  const optimized = data !== dataUrl;
+  return {
+    mimeType: optimized ? "image/jpeg" : file.type || "image/jpeg",
+    size: optimized ? dataUrlByteSize(data) : file.size,
+    data,
+    previewDataUrl,
+  };
 }
 
 export function RoomChatChrome({
+  allowAttachmentOnly = false,
   attachmentActions = defaultAttachmentActions,
   input,
   inputPlaceholder = "",
@@ -239,6 +268,7 @@ export function RoomChatChrome({
   variant = "living",
 }: RoomChatChromeProps) {
   const [panel, setPanel] = useState<ToolPanel>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [models, setModels] = useState<ModelOption[]>(mockModels);
   const [model, setModel] = useState<ModelOption>(() => mockModels.find((item) => item.id === "opus-48") ?? mockModels[0]);
   const [profileId, setProfileId] = useState(() => (mockModels.find((item) => item.id === "opus-48") ?? mockModels[0]).profiles[0].id);
@@ -457,11 +487,23 @@ export function RoomChatChrome({
     return null;
   }, [model, modelField, modelSettings, models, profileId]);
 
-  const submit = () => {
-    if (sendDisabled) return;
+  const canSubmit = !sendDisabled && !submitting && (Boolean(input.trim()) || (allowAttachmentOnly && attachments.length > 0));
+
+  const submit = async () => {
+    if (!canSubmit) return;
     setPanel(null);
-    onSend(attachments);
-    setAttachments([]);
+    setSubmitting(true);
+    try {
+      const sent = await onSend(attachments);
+      if (sent !== false) {
+        setAttachments([]);
+        setAttachmentNotice("");
+      }
+    } catch (error) {
+      setAttachmentNotice(error instanceof Error ? error.message : "发送失败，附件已保留");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const acceptFiles = async (files: FileList | null) => {
@@ -636,11 +678,11 @@ export function RoomChatChrome({
             if (event.nativeEvent.isComposing) return;
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              submit();
+              void submit();
             }
           }}
         />
-        <button aria-label="发送" className="living-send-button" disabled={sendDisabled} onClick={submit}><img src={livingAsset("composer-send.svg")} alt="" /></button>
+        <button aria-label="发送" className="living-send-button" disabled={!canSubmit} onClick={() => void submit()}><img src={livingAsset("composer-send.svg")} alt="" /></button>
       </div>
 
       <input accept="image/*" capture="environment" className="living-hidden-file" onChange={(event) => { void acceptFiles(event.target.files); event.target.value = ""; }} ref={cameraInput} type="file" />
