@@ -9,7 +9,7 @@ import { RoomChatChrome } from "./RoomChatChrome";
 import { ConversationBubble } from "./ConversationBubble";
 import { MessageActions } from "./MessageActions";
 import { assetPath } from "../utils/assetPath";
-import { deliverToLivingRoom } from "../services/livingRoomConversation";
+import { compactLivingRoomMessages, deliverToLivingRoom } from "../services/livingRoomConversation";
 import { ChatImageViewer } from "./ChatImageViewer";
 import type { MessageAttachment } from "../domain/ocean";
 
@@ -26,7 +26,7 @@ function asset(name: string) {
 }
 
 export function LivingRoom({ isNight, onNightChange }: LivingRoomProps) {
-  const [messages, setMessages] = usePersistentState<MessageTurn[]>("ocean:chat:living-main", []);
+  const [messages, setMessages] = usePersistentState<MessageTurn[]>("ocean:chat:living-main", [], compactLivingRoomMessages);
   const [continuity, setContinuity] = usePersistentState<ContinuitySnapshot>("ocean:continuity:living-main", INITIAL_CONTINUITY);
   const [input, setInput] = useState("");
   const [nightTalk, setNightTalk] = usePersistentState("ocean:living:night-talk", false);
@@ -61,7 +61,7 @@ export function LivingRoom({ isNight, onNightChange }: LivingRoomProps) {
   }, [messages, streaming]);
 
   const deliver = async (value: string, attachments: ChatAttachment[] = [], baseMessages = messages) => {
-    if (!value || streaming) return;
+    if ((!value.trim() && attachments.length === 0) || streaming) return null;
     setStreaming(true);
     setMemoryNotice("");
     let responseSettled = false;
@@ -87,6 +87,7 @@ export function LivingRoom({ isNight, onNightChange }: LivingRoomProps) {
         await stagedMemoryAdapter.saveCandidate(value, "living:explicit");
         setMemoryNotice("已加入本地记忆候选，联网后同步");
       }
+      return delivered;
     } finally {
       if (!responseSettled) setStreaming(false);
     }
@@ -94,9 +95,18 @@ export function LivingRoom({ isNight, onNightChange }: LivingRoomProps) {
 
   const send = async (attachments: ChatAttachment[] = []) => {
     const value = input.trim();
-    if (!value || streaming) return;
+    if ((!value && attachments.length === 0) || streaming) return false;
     setInput("");
-    await deliver(value, attachments);
+    try {
+      const delivered = await deliver(value, attachments);
+      if (delivered && !delivered.error) return true;
+    } catch {
+      // Keep both the draft and attachments available for a clean retry.
+    }
+    if (value) {
+      setInput(value);
+    }
+    return false;
   };
 
   const retryFromTurn = async (turnIndex: number) => {
@@ -141,9 +151,9 @@ export function LivingRoom({ isNight, onNightChange }: LivingRoomProps) {
             <div className={`living-turn ${turn.role}`}>
               {turn.attachments?.length ? <div className="living-message-images">
                 {turn.attachments.map((attachment) => (
-                  <button aria-label={`放大查看 ${attachment.name}`} key={attachment.id} onClick={() => setViewingImage(attachment)}>
-                    <img alt={attachment.name} src={attachment.previewDataUrl} />
-                  </button>
+                  attachment.previewDataUrl
+                    ? <button aria-label={`放大查看 ${attachment.name}`} key={attachment.id} onClick={() => setViewingImage(attachment)}><img alt={attachment.name} src={attachment.previewDataUrl} /></button>
+                    : <div aria-label={`${attachment.name}（缩略图已释放）`} className="living-message-image-record" key={attachment.id}><span aria-hidden="true">▧</span><small>{attachment.name}</small></div>
                 ))}
               </div> : null}
               {turn.segments.map((segment, index) => (
@@ -165,13 +175,14 @@ export function LivingRoom({ isNight, onNightChange }: LivingRoomProps) {
       <LivingFurniture />
       {memoryNotice && <div className="living-memory-notice">{memoryNotice}</div>}
       <RoomChatChrome
+        allowAttachmentOnly
         input={input}
         nightTalk={nightTalk}
         onInputChange={setInput}
         onNightTalkChange={setNightTalk}
-        onSend={(attachments) => void send(attachments)}
+        onSend={send}
         reasoning={latestReasoning}
-        sendDisabled={!input.trim() || streaming}
+        sendDisabled={streaming}
         storageRemainingPercent={continuity.storage?.percentRemaining}
       />
       <ChatImageViewer attachment={viewingImage} onClose={() => setViewingImage(null)} />

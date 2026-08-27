@@ -17,7 +17,7 @@ export function ChatImageViewer({ attachment, onClose }: ChatImageViewerProps) {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [attachment, onClose]);
 
-  if (!attachment) return null;
+  if (!attachment?.previewDataUrl) return null;
   const shell = document.querySelector(".ocean-shell");
   if (!shell) return null;
 

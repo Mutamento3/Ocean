@@ -8,6 +8,22 @@ import { syncOrQueue } from "../sync/gatewaySync";
 
 const LIVING_MESSAGES_KEY = "ocean:chat:living-main";
 const LIVING_CONTINUITY_KEY = "ocean:continuity:living-main";
+const PERSISTED_IMAGE_PREVIEW_BUDGET = 900_000;
+
+export function compactLivingRoomMessages(messages: MessageTurn[]) {
+  let remainingPreviewCharacters = PERSISTED_IMAGE_PREVIEW_BUDGET;
+  return messages.slice().reverse().map((turn) => ({
+    ...turn,
+    attachments: turn.attachments?.map((attachment) => {
+      const previewLength = attachment.previewDataUrl?.length ?? 0;
+      if (!previewLength || previewLength > remainingPreviewCharacters) {
+        return { ...attachment, previewDataUrl: undefined };
+      }
+      remainingPreviewCharacters -= previewLength;
+      return attachment;
+    }),
+  })).reverse();
+}
 
 function readState<T>(key: string, fallback: T) {
   try {
@@ -66,7 +82,11 @@ export interface LivingRoomDeliveryResult {
 
 export async function deliverToLivingRoom(input: string, options: LivingRoomDeliveryOptions = {}): Promise<LivingRoomDeliveryResult> {
   const value = input.trim();
-  if (!value) throw new Error("不能发送空消息");
+  const currentAttachments = options.attachments ?? [];
+  if (!value && currentAttachments.length === 0) throw new Error("不能发送空消息");
+  const providerInput = value || (currentAttachments.some((attachment) => attachment.kind === "image")
+    ? "请查看我发送的图片。"
+    : "请读取我发送的附件。");
   const currentMessages = options.messages ?? readState<MessageTurn[]>(LIVING_MESSAGES_KEY, []);
   const currentContinuity = options.continuity ?? readState<ContinuitySnapshot>(LIVING_CONTINUITY_KEY, INITIAL_CONTINUITY);
   const createdAt = new Date().toISOString();
@@ -76,12 +96,13 @@ export async function deliverToLivingRoom(input: string, options: LivingRoomDeli
     if (!previewDataUrl) return [];
     return [{ id: attachment.id, kind: "image" as const, name: attachment.name, mimeType: attachment.mimeType, size: attachment.size, previewDataUrl }];
   });
-  const userTurn: MessageTurn = { id: crypto.randomUUID(), role: "user", createdAt, segments: [value], attachments: messageAttachments.length ? messageAttachments : undefined, source: "chat" };
+  const userTurn: MessageTurn = { id: crypto.randomUUID(), role: "user", createdAt, segments: value ? [value] : [], attachments: messageAttachments.length ? messageAttachments : undefined, source: "chat" };
   const replyId = crypto.randomUUID();
   const reply: MessageTurn = { id: replyId, role: "assistant", createdAt, segments: [], source: "chat" };
   let nextMessages = [...currentMessages, userTurn, reply];
   const publishMessages = () => {
-    persistState(LIVING_MESSAGES_KEY, nextMessages);
+    window.localStorage.setItem(LIVING_MESSAGES_KEY, JSON.stringify(compactLivingRoomMessages(nextMessages)));
+    window.dispatchEvent(new CustomEvent("ocean:persist", { detail: { key: LIVING_MESSAGES_KEY, value: nextMessages } }));
     options.onMessages?.(nextMessages);
   };
   publishMessages();
@@ -101,7 +122,7 @@ export async function deliverToLivingRoom(input: string, options: LivingRoomDeli
   };
 
   try {
-    for await (const event of adapter.streamReply(value, {
+    for await (const event of adapter.streamReply(providerInput, {
       mode: "living-room",
       nightTalk: options.nightTalk ?? false,
       elapsedSinceLastTurn: options.elapsedSinceLastTurn ?? describeElapsedSinceLastUserTurn(currentMessages),
@@ -137,7 +158,7 @@ export async function deliverToLivingRoom(input: string, options: LivingRoomDeli
   const evaluated = await forgeContinuity(nextMessages, currentContinuity);
   persistState(LIVING_CONTINUITY_KEY, evaluated);
   options.onContinuity?.(evaluated);
-  const synced = await syncOrQueue("conversation", { id: "living-main", scope: "living-main", messages: nextMessages });
+  const synced = await syncOrQueue("conversation", { id: "living-main", scope: "living-main", messages: compactLivingRoomMessages(nextMessages) });
   return {
     continuity: evaluated,
     error,

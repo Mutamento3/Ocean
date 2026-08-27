@@ -21,7 +21,7 @@ export interface MessageAttachment {
   name: string;
   mimeType: string;
   size: number;
-  previewDataUrl: string;
+  previewDataUrl?: string;
 }
 
 export interface ChatAttachment {

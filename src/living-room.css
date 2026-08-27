@@ -938,7 +938,7 @@
   background: var(--surface);
   border: 1px solid color-mix(in srgb, var(--accent-soft) 46%, transparent);
   border-radius: 12px;
-  color: var(--ink);
+  color: var(--popover-ink);
   display: flex;
   flex: 0 0 auto;
   font: 11px/22px var(--font-cjk);
@@ -957,7 +957,7 @@
 .living-attachment-notice {
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   border-radius: 12px;
-  color: var(--muted);
+  color: var(--popover-ink);
   font: 11px/24px var(--font-cjk);
   left: 50%;
   max-width: 260px;
@@ -969,6 +969,26 @@
   transform: translateX(-50%);
   white-space: nowrap;
   z-index: 8;
+}
+
+.living-message-image-record {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--accent-soft) 46%, transparent);
+  border-radius: 14px;
+  color: var(--popover-ink);
+  display: flex;
+  font: 11px/16px var(--font-cjk);
+  gap: 7px;
+  max-width: 180px;
+  min-height: 42px;
+  padding: 7px 10px;
+}
+
+.living-message-image-record small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .living-connector-menu {
